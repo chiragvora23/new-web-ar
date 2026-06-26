@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web AR Video Overlay Experience</title>
+    
+    <!-- Google Fonts for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="./style.css">
+
+    <!-- A-Frame VR Library -->
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <!-- MindAR Library for Image Tracking in A-Frame -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <script>
+        // Custom A-Frame component to control video play/pause on target detection
+        AFRAME.registerComponent('ar-video-control', {
+            init: function () {
+                const targetEl = this.el;
+                const videoEl = document.querySelector('#ar-video');
+                const scanningOverlay = document.querySelector('#scanning-overlay');
+                const statusText = document.querySelector('#status-text');
+
+                // When image target is detected in camera view
+                targetEl.addEventListener('targetFound', event => {
+                    console.log("Image Target Found!");
+                    
+                    if (scanningOverlay) {
+                        // Change UI to show target detected
+                        scanningOverlay.classList.add('hidden');
+                    }
+                    if (statusText) {
+                        statusText.innerHTML = "🎯 Image Detected! Playing Video...";
+                        statusText.style.display = "block";
+                        setTimeout(() => { statusText.style.display = "none"; }, 3000);
+                    }
+
+                    if (videoEl) {
+                        videoEl.play().catch(err => {
+                            console.warn("Autoplay blocked by browser, needs user interaction", err);
+                            if (statusText) {
+                                statusText.innerHTML = "⚠️ Tap screen to play video";
+                                statusText.style.display = "block";
+                            }
+                        });
+                    }
+                });
+
+                // When image target leaves camera view
+                targetEl.addEventListener('targetLost', event => {
+                    console.log("Image Target Lost!");
+                    
+                    if (scanningOverlay) {
+                        scanningOverlay.classList.remove('hidden');
+                    }
+                    if (statusText) {
+                        statusText.style.display = "none";
+                    }
+
+                    if (videoEl) {
+                        videoEl.pause();
+                    }
+                });
+            }
+        });
+
+        // UI Initialization & Video Autoplay Unlocker for iOS/Android
+        document.addEventListener('DOMContentLoaded', () => {
+            const startButton = document.querySelector('#start-button');
+            const introOverlay = document.querySelector('#intro-overlay');
+            const scanningOverlay = document.querySelector('#scanning-overlay');
+            const videoEl = document.querySelector('#ar-video');
+
+            // Global click fallback to ensure video plays if browser blocks it initially
+            window.addEventListener('click', () => {
+                if (videoEl && videoEl.paused && document.querySelector('#scanning-overlay.hidden')) {
+                    videoEl.play().catch(e => console.warn(e));
+                }
+            });
+
+            startButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log("Start button clicked. Unlocking video & audio...");
+                
+                // Hide Intro overlay and show scanning indicator
+                introOverlay.classList.add('hidden');
+                scanningOverlay.classList.remove('hidden');
+
+                // MASTERCLASS TRICK: Unmute and play/pause on direct user click to unlock media engine
+                if (videoEl) {
+                    videoEl.muted = false; // Unmute audio
+                    videoEl.play().then(() => {
+                        videoEl.pause(); // Successfully unlocked for mobile WebGL texture!
+                        console.log("Video engine unlocked successfully.");
+                    }).catch(err => {
+                        console.warn("Video unlock warning:", err);
+                    });
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+
+    <!-- Intro / Start Screen (Required to unlock camera & audio permissions on mobile) -->
+    <div id="intro-overlay" class="overlay flex-center">
+        <div class="glass-card">
+            <h1>✨ Web AR Experience</h1>
+            <p>Scan the drawing to unlock the hidden video overlay.</p>
+            <div class="instructions">
+                <p>💡 <b>Tip:</b> Make sure your room is bright and hold the camera steady over the image.</p>
+            </div>
+            <button id="start-button" class="btn-primary">Start AR / शुरू करें</button>
+        </div>
+    </div>
+
+    <!-- Scanning Indicator (Shows when searching for the target image) -->
+    <div id="scanning-overlay" class="overlay-scanning flex-center pointer-events-none hidden">
+        <div class="scan-box">
+            <div class="corner top-left"></div>
+            <div class="corner top-right"></div>
+            <div class="corner bottom-left"></div>
+            <div class="corner bottom-right"></div>
+        </div>
+        <div class="scan-text glass-pill">
+            <span class="spinner"></span> Align image within frame / इमेज को कैमरे के सामने लाएं
+        </div>
+    </div>
+
+    <!-- Status Toast Notification (Shows Target Found / Lost debug messages) -->
+    <div id="status-text" class="status-toast" style="display: none;"></div>
+
+    <!-- MindAR + A-Frame Scene (autoStart: true ensures robust tracking engine startup) -->
+    <a-scene 
+        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.0001; filterBeta: 0.001;" 
+        color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights"
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+        
+        <!-- Asset Management System (muted attribute initially required by mobile browsers for WebGL) -->
+        <a-assets>
+            <video id="ar-video" src="./video.mp4" playsinline webkit-playsinline muted loop crossorigin="anonymous"></video>
+        </a-assets>
+
+        <!-- Camera -->
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- Target Image Entity -->
+        <a-entity mindar-image-target="targetIndex: 0" ar-video-control>
+            <!-- Video Plane matching the aspect ratio of the image -->
+            <a-video src="#ar-video" position="0 0 0" width="1" height="1.35" rotation="0 0 0"></a-video>
+        </a-entity>
+        
+    </a-scene>
+
+</body>
+</html>
